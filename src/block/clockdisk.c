@@ -83,7 +83,7 @@ static void cache_update(struct clockdisk_state *cs, unsigned int ino, block_no 
 		if (cs->block_infos[id].status != NEW) {
 			// Evict this cache slot
 			if (cs->block_infos[id].status != EMPTY && cs->block_infos[id].is_dirty) {
-				(*cs->below->write)(cs->below, ino, offset, &cs->blocks[id]);
+				(*cs->below->write)(cs->below, cs->block_infos[id].ino, cs->block_infos[id].offset, &cs->blocks[id]);
 			}
 
 			// Write new block in
