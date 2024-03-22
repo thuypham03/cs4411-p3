@@ -63,6 +63,17 @@ static int clockdisk_getsize(block_if bi, unsigned int ino){
 static int clockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 	struct clockdisk_state *cs = bi->state;
 
+	// Clear cache's entries of about-to-be-deleted blocks
+	for (block_no i = 0; i < cs->nblocks; ++i) {
+		if (cs->block_infos[i].status != EMPTY && 
+			cs->block_infos[i].ino == ino && cs->block_infos[i].offset >= nblocks) {
+				if (cs->block_infos[i].is_dirty) {
+					(*cs->below->write)(cs->below, ino, cs->block_infos[i].offset, &cs->blocks[i]);
+				}
+				cs->block_infos[i].status = EMPTY;
+			}
+	}
+
 	return (*cs->below->setsize)(cs->below, ino, nblocks);
 }
 
@@ -72,7 +83,7 @@ static void cache_update(struct clockdisk_state *cs, unsigned int ino, block_no 
 		if (cs->block_infos[id].status != NEW) {
 			// Evict this cache slot
 			if (cs->block_infos[id].status != EMPTY && cs->block_infos[id].is_dirty) {
-				(*cs->below->write)(cs->below, ino, offset, block);
+				(*cs->below->write)(cs->below, ino, offset, &cs->blocks[id]);
 			}
 
 			// Write new block in
@@ -116,17 +127,37 @@ static int clockdisk_read(block_if bi, unsigned int ino, block_no offset, block_
 }
 
 static int clockdisk_write(block_if bi, unsigned int ino, block_no offset, block_t *block){
-	/* Your code should replace this naive implementation
-	 */
-	
 	struct clockdisk_state *cs = bi->state;
 
-	return (*cs->below->write)(cs->below, ino, offset, block);
+	for (block_no id = 0; id < cs->nblocks; ++id) {
+		if (cs->block_infos[id].status != EMPTY && 
+			cs->block_infos[id].ino == ino && cs->block_infos[id].offset == offset) {
+				// Cache hit
+				memcpy(&cs->blocks[id], block, sizeof(block_t));
+				cs->block_infos[id].status = NEW;
+				cs->block_infos[id].is_dirty = 1;
+				cs->write_hit += 1;
+				return 0;
+			}
+	}
+
+	// Cache miss
+	cs->write_miss += 1;
+	cache_update(cs, ino, offset, block, 1);
+	return 0;
 }
 
 static int clockdisk_sync(block_if bi, unsigned int ino){
-	/* Your code goes here:
-	 */
+	struct clockdisk_state *cs = bi->state;
+
+	for (block_no id = 0; id < cs->nblocks; ++cs) {
+		if (cs->block_infos[id].status != EMPTY && cs->block_infos[id].is_dirty && 
+			(cs->block_infos[id].ino == ino || ino == (unsigned int) -1)) {
+				(*cs->below->write)(cs->below, cs->block_infos[id].ino, cs->block_infos[id].offset, &cs->blocks[id]);
+				cs->block_infos[id].is_dirty = 0;
+			}
+	}
+
 	return 0;
 }
 
