@@ -74,9 +74,9 @@ static void cache_update(struct wtclockdisk_state *cs, unsigned int ino, block_n
 
 			cs->clock_hand = (id + 1) % cs->nblocks;
 			return;
-		} else 
-			cs->block_infos[id].status = OLD;
-
+		}
+		
+		cs->block_infos[id].status = OLD;
 		cs->clock_hand = (id + 1) % cs->nblocks;
 	}
 }
