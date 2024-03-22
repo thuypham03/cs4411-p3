@@ -35,22 +35,29 @@ struct wtclockdisk_state {
 
 	/* Stats.
 	 */
-	unsigned int read_hit, read_miss, write_hit, write_miss;
+	unsigned int read_hit, read_miss, write_hit, write_miss, nops;
 };
+
+void wtclockdisk_dump_stats_if_needed(block_if bi);
 
 static int wtclockdisk_getninodes(block_store_t *this_bs){
 	struct wtclockdisk_state *cs = this_bs->state;
+	++cs->nops;
+	wtclockdisk_dump_stats_if_needed(this_bs);
 	return (*cs->below->getninodes)(cs->below);
 }
 
 static int wtclockdisk_getsize(block_if bi, unsigned int ino){
 	struct wtclockdisk_state *cs = bi->state;
+	++cs->nops;
+	wtclockdisk_dump_stats_if_needed(bi);
 	return (*cs->below->getsize)(cs->below, ino);
 }
 
 static int wtclockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 	struct wtclockdisk_state *cs = bi->state;
-	
+	++cs->nops;
+
 	// Clear cache's entries of about-to-be-deleted blocks
 	for (block_no i = 0; i < cs->nblocks; ++i) {
 		if (cs->block_infos[i].status != EMPTY && 
@@ -59,6 +66,7 @@ static int wtclockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 			}
 	}
 
+	wtclockdisk_dump_stats_if_needed(bi);
 	return (*cs->below->setsize)(cs->below, ino, nblocks);
 }
 
@@ -83,6 +91,7 @@ static void cache_update(struct wtclockdisk_state *cs, unsigned int ino, block_n
 
 static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, block_t *block){
 	struct wtclockdisk_state *cs = bi->state;
+	++cs->nops;
 
 	for (block_no i = 0; i < cs->nblocks; ++i) {
 		if (cs->block_infos[i].status != EMPTY && 
@@ -91,6 +100,8 @@ static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, bloc
 				memcpy(block, &cs->blocks[i], sizeof(block_t));
 				cs->block_infos[i].status = NEW;
 				cs->read_hit += 1;
+
+				wtclockdisk_dump_stats_if_needed(bi);
 				return 0;
 			}
 	}
@@ -100,13 +111,15 @@ static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, bloc
 
 	int r = (*cs->below->read)(cs->below, ino, offset, block);
 	if (r == -1) return r;
-
 	cache_update(cs, ino, offset, block);
+
+	wtclockdisk_dump_stats_if_needed(bi);
 	return 0;
 }
 
 static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset, block_t *block){
 	struct wtclockdisk_state *cs = bi->state;
+	++cs->nops;
 
 	for (block_no i = 0; i < cs->nblocks; ++i) {
 		if (cs->block_infos[i].status != EMPTY && 
@@ -115,6 +128,8 @@ static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset, blo
 				memcpy(&cs->blocks[i], block, sizeof(block_t));
 				cs->block_infos[i].status = NEW;
 				cs->write_hit += 1;
+
+				wtclockdisk_dump_stats_if_needed(bi);
 				return (*cs->below->write)(cs->below, ino, offset, block);
 			}
 	}
@@ -124,8 +139,9 @@ static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset, blo
 
 	int w = (*cs->below->write)(cs->below, ino, offset, block);
 	if (w == -1) return w;
-
 	cache_update(cs, ino, offset, block);
+
+	wtclockdisk_dump_stats_if_needed(bi);
 	return 0;
 }
 
@@ -138,7 +154,14 @@ static void wtclockdisk_release(block_if bi){
 
 static int wtclockdisk_sync(block_if bi, unsigned int ino){
 	struct wtclockdisk_state *cs = bi->state;
+	++cs->nops;
+	wtclockdisk_dump_stats_if_needed(bi);
 	return (*cs->below->sync)(cs->below, ino);
+}
+
+void wtclockdisk_dump_stats_if_needed(block_if bi) {
+	struct wtclockdisk_state *cs = bi->state;
+	if (cs->nops % 20 == 0) wtclockdisk_dump_stats(bi);
 }
 
 void wtclockdisk_dump_stats(block_if bi){
@@ -168,6 +191,7 @@ block_if wtclockdisk_init(block_if below, block_t *blocks, block_no nblocks){
 	cs->read_miss = 0;
 	cs->write_hit = 0;
 	cs->write_miss = 0;
+	cs->nops = 0;
 
 	/* Return a block interface to this inode.
 	 */
