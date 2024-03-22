@@ -29,7 +29,7 @@ enum block_status {
  */
 typedef struct block_info {
 	enum block_status status;
-	unsigned int is_dirty;
+	unsigned int dirty;
 	unsigned int ino;
 	block_no offset;
 } block_info_t;
@@ -67,7 +67,7 @@ static int clockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 	for (block_no i = 0; i < cs->nblocks; ++i) {
 		if (cs->block_infos[i].status != EMPTY && 
 			cs->block_infos[i].ino == ino && cs->block_infos[i].offset >= nblocks) {
-				if (cs->block_infos[i].is_dirty) {
+				if (cs->block_infos[i].dirty) {
 					(*cs->below->write)(cs->below, ino, cs->block_infos[i].offset, &cs->blocks[i]);
 				}
 				cs->block_infos[i].status = EMPTY;
@@ -79,26 +79,26 @@ static int clockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 
 static void cache_update(struct clockdisk_state *cs, unsigned int ino, block_no offset, block_t *block, unsigned int dirty) {
 	while (1) {
-		block_no id = cs->clock_hand;
-		if (cs->block_infos[id].status != NEW) {
+		block_no i = cs->clock_hand;
+		if (cs->block_infos[i].status != NEW) {
 			// Evict this cache slot
-			if (cs->block_infos[id].status != EMPTY && cs->block_infos[id].is_dirty) {
-				(*cs->below->write)(cs->below, cs->block_infos[id].ino, cs->block_infos[id].offset, &cs->blocks[id]);
+			if (cs->block_infos[i].status != EMPTY && cs->block_infos[i].dirty) {
+				(*cs->below->write)(cs->below, cs->block_infos[i].ino, cs->block_infos[i].offset, &cs->blocks[i]);
 			}
 
 			// Write new block in
-			cs->block_infos[id].status = NEW;
-			cs->block_infos[id].is_dirty = dirty;
-			cs->block_infos[id].ino = ino;
-			cs->block_infos[id].offset = offset;
-			memcpy(&cs->blocks[id], block, sizeof(block_t));
+			cs->block_infos[i].status = NEW;
+			cs->block_infos[i].dirty = dirty;
+			cs->block_infos[i].ino = ino;
+			cs->block_infos[i].offset = offset;
+			memcpy(&cs->blocks[i], block, sizeof(block_t));
 
-			cs->clock_hand = (id + 1) % cs->nblocks;
+			cs->clock_hand = (i + 1) % cs->nblocks;
 			return;
 		}  
 		
-		cs->block_infos[id].status = OLD;
-		cs->clock_hand = (id + 1) % cs->nblocks;
+		cs->block_infos[i].status = OLD;
+		cs->clock_hand = (i + 1) % cs->nblocks;
 	}
 }
 
@@ -129,13 +129,13 @@ static int clockdisk_read(block_if bi, unsigned int ino, block_no offset, block_
 static int clockdisk_write(block_if bi, unsigned int ino, block_no offset, block_t *block){
 	struct clockdisk_state *cs = bi->state;
 
-	for (block_no id = 0; id < cs->nblocks; ++id) {
-		if (cs->block_infos[id].status != EMPTY && 
-			cs->block_infos[id].ino == ino && cs->block_infos[id].offset == offset) {
+	for (block_no i = 0; i < cs->nblocks; ++i) {
+		if (cs->block_infos[i].status != EMPTY && 
+			cs->block_infos[i].ino == ino && cs->block_infos[i].offset == offset) {
 				// Cache hit
-				memcpy(&cs->blocks[id], block, sizeof(block_t));
-				cs->block_infos[id].status = NEW;
-				cs->block_infos[id].is_dirty = 1;
+				memcpy(&cs->blocks[i], block, sizeof(block_t));
+				cs->block_infos[i].status = NEW;
+				cs->block_infos[i].dirty = 1;
 				cs->write_hit += 1;
 				return 0;
 			}
@@ -150,11 +150,11 @@ static int clockdisk_write(block_if bi, unsigned int ino, block_no offset, block
 static int clockdisk_sync(block_if bi, unsigned int ino){
 	struct clockdisk_state *cs = bi->state;
 
-	for (block_no id = 0; id < cs->nblocks; ++cs) {
-		if (cs->block_infos[id].status != EMPTY && cs->block_infos[id].is_dirty && 
-			(cs->block_infos[id].ino == ino || ino == (unsigned int) -1)) {
-				(*cs->below->write)(cs->below, cs->block_infos[id].ino, cs->block_infos[id].offset, &cs->blocks[id]);
-				cs->block_infos[id].is_dirty = 0;
+	for (block_no i = 0; i < cs->nblocks; ++cs) {
+		if (cs->block_infos[i].status != EMPTY && cs->block_infos[i].dirty && 
+			(cs->block_infos[i].ino == ino || ino == (unsigned int) -1)) {
+				(*cs->below->write)(cs->below, cs->block_infos[i].ino, cs->block_infos[i].offset, &cs->blocks[i]);
+				cs->block_infos[i].dirty = 0;
 			}
 	}
 

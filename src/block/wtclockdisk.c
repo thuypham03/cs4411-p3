@@ -64,20 +64,20 @@ static int wtclockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 
 static void cache_update(struct wtclockdisk_state *cs, unsigned int ino, block_no offset, block_t *block) {
 	while (1) {
-		block_no id = cs->clock_hand;
-		if (cs->block_infos[id].status != NEW) {
+		block_no i = cs->clock_hand;
+		if (cs->block_infos[i].status != NEW) {
 			// Evict this cache slot
-			cs->block_infos[id].status = NEW;
-			cs->block_infos[id].ino = ino;
-			cs->block_infos[id].offset = offset;
-			memcpy(&cs->blocks[id], block, sizeof(block_t));
+			cs->block_infos[i].status = NEW;
+			cs->block_infos[i].ino = ino;
+			cs->block_infos[i].offset = offset;
+			memcpy(&cs->blocks[i], block, sizeof(block_t));
 
-			cs->clock_hand = (id + 1) % cs->nblocks;
+			cs->clock_hand = (i + 1) % cs->nblocks;
 			return;
 		}
 		
-		cs->block_infos[id].status = OLD;
-		cs->clock_hand = (id + 1) % cs->nblocks;
+		cs->block_infos[i].status = OLD;
+		cs->clock_hand = (i + 1) % cs->nblocks;
 	}
 }
 
@@ -108,12 +108,12 @@ static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, bloc
 static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset, block_t *block){
 	struct wtclockdisk_state *cs = bi->state;
 
-	for (block_no id = 0; id < cs->nblocks; ++id) {
-		if (cs->block_infos[id].status != EMPTY && 
-			cs->block_infos[id].ino == ino && cs->block_infos[id].offset == offset) {
+	for (block_no i = 0; i < cs->nblocks; ++i) {
+		if (cs->block_infos[i].status != EMPTY && 
+			cs->block_infos[i].ino == ino && cs->block_infos[i].offset == offset) {
 				// Cache hit
-				memcpy(&cs->blocks[id], block, sizeof(block_t));
-				cs->block_infos[id].status = NEW;
+				memcpy(&cs->blocks[i], block, sizeof(block_t));
+				cs->block_infos[i].status = NEW;
 				cs->write_hit += 1;
 				return (*cs->below->write)(cs->below, ino, offset, block);
 			}
