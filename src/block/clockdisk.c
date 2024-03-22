@@ -81,7 +81,7 @@ static void cache_update(struct clockdisk_state *cs, unsigned int ino, block_no 
 	while (1) {
 		block_no i = cs->clock_hand;
 		if (cs->block_infos[i].status != NEW) {
-			// Evict this cache slot
+			// Write-back if the evicted slot is dirty
 			if (cs->block_infos[i].status != EMPTY && cs->block_infos[i].dirty) {
 				(*cs->below->write)(cs->below, cs->block_infos[i].ino, cs->block_infos[i].offset, &cs->blocks[i]);
 			}
@@ -189,7 +189,7 @@ block_if clockdisk_init(block_if below, block_t *blocks, block_no nblocks){
 	cs->blocks = blocks;
 	cs->nblocks = nblocks;
 	cs->clock_hand = 0;
-	cs->block_infos = calloc(nblocks, sizeof(*cs->block_infos));
+	cs->block_infos = calloc(nblocks, sizeof(block_info_t));
 
 	cs->read_hit = 0;
 	cs->read_miss = 0;
