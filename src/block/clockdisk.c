@@ -164,7 +164,7 @@ static int clockdisk_sync(block_if bi, unsigned int ino){
 	struct clockdisk_state *cs = bi->state;
 	++cs->nops;
 
-	for (block_no i = 0; i < cs->nblocks; ++cs) {
+	for (block_no i = 0; i < cs->nblocks; ++i) {
 		if (cs->block_infos[i].status != EMPTY && cs->block_infos[i].dirty && 
 			(cs->block_infos[i].ino == ino || ino == (unsigned int) -1)) {
 				(*cs->below->write)(cs->below, cs->block_infos[i].ino, cs->block_infos[i].offset, &cs->blocks[i]);
@@ -185,7 +185,7 @@ static void clockdisk_release(block_if bi){
 
 void clockdisk_dump_stats_if_needed(block_if bi) {
 	struct clockdisk_state *cs = bi->state;
-	// if (cs->nops % 20 == 0) clockdisk_dump_stats(bi);
+	if (cs->nops % 20 == 0) clockdisk_dump_stats(bi);
 }
 
 void clockdisk_dump_stats(block_if bi){
