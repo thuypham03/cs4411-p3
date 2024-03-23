@@ -127,10 +127,10 @@ static int clockdisk_read(block_if bi, unsigned int ino, block_no offset, block_
 	cs->read_miss += 1;
 
 	int r = (*cs->below->read)(cs->below, ino, offset, block);
-	if (r == -1) return r;
-	cache_update(cs, ino, offset, block, 0);
-
 	clockdisk_dump_stats_if_needed(bi);
+	if (r == -1) return r;
+
+	cache_update(cs, ino, offset, block, 0);
 	return 0;
 }
 
@@ -154,9 +154,9 @@ static int clockdisk_write(block_if bi, unsigned int ino, block_no offset, block
 
 	// Cache miss
 	cs->write_miss += 1;
-	cache_update(cs, ino, offset, block, 1);
-
 	clockdisk_dump_stats_if_needed(bi);
+
+	cache_update(cs, ino, offset, block, 1);
 	return 0;
 }
 

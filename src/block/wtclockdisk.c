@@ -110,10 +110,10 @@ static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, bloc
 	cs->read_miss += 1;
 
 	int r = (*cs->below->read)(cs->below, ino, offset, block);
-	if (r == -1) return r;
-	cache_update(cs, ino, offset, block);
-
 	wtclockdisk_dump_stats_if_needed(bi);
+	if (r == -1) return r;
+
+	cache_update(cs, ino, offset, block);
 	return 0;
 }
 
@@ -138,10 +138,10 @@ static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset, blo
 	cs->write_miss += 1;
 
 	int w = (*cs->below->write)(cs->below, ino, offset, block);
-	if (w == -1) return w;
-	cache_update(cs, ino, offset, block);
-
 	wtclockdisk_dump_stats_if_needed(bi);
+	if (w == -1) return w;
+
+	cache_update(cs, ino, offset, block);
 	return 0;
 }
 
