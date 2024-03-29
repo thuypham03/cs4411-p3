@@ -5,12 +5,15 @@
 #include <unistd.h>
 #include <assert.h>
 #include <egos/block_store.h>
-#include "fatdisk.h"
+#include "treedisk.h"
+#include "clockdisk.c"
 
 #define DISK_SIZE 15
 #define MAX_INODES 6
+#define CACHE_SIZE 2
 
 static block_t blocks[DISK_SIZE]; // blocks for ram_disk
+static block_t cache_blocks[CACHE_SIZE]; // blocks for clock_disk
 
 static void panic(const char *s) {
     fprintf(stderr, "!!PANIC: %s\n", s);
@@ -31,14 +34,15 @@ void dump_blocks(){
 int main(int argc, char **argv) {
     assert(sizeof(block_no) == 4);
     assert(BLOCK_SIZE == 32);
-    assert(FAT_PER_BLOCK == 8);
+    // assert(FAT_PER_BLOCK == 8);
 
     block_store_t *disk = ramdisk_init(blocks, DISK_SIZE);
-    if (fatdisk_create(disk, 0, MAX_INODES) < 0) {
+    if (treedisk_create(disk, 0, MAX_INODES) < 0) {
         panic("trace: can't create fatdisk file system");
     }
-    block_store_t *fdisk = fatdisk_init(disk, 0);
-    block_store_t *cdisk = checkdisk_init(fdisk, "fat");
+    block_store_t *tdisk = treedisk_init(disk, 0);
+    block_store_t *mydisk = clockdisk_init(tdisk, cache_blocks, CACHE_SIZE);
+    block_store_t *cdisk = checkdisk_init(mydisk, "clock_disk");
 
     for (int cnt = 1;; cnt++) {
         dump_blocks();
@@ -130,7 +134,7 @@ int main(int argc, char **argv) {
     }
 
     (*cdisk->release)(cdisk);
-    (*fdisk->release)(fdisk);
+    (*mydisk->release)(mydisk);
     (*disk->release)(disk);
 
     return 0;
